@@ -9,9 +9,7 @@ locals {
   dbfs_ai_core     = format("dbfs:/databricks/appinsights/%s", local.ai_core)
   dbfs_ai_logging  = format("dbfs:/databricks/appinsights/%s", local.ai_logging)
   dbfs_init_script = format("dbfs:/databricks/appinsights/%s", local.init_script)
-
 }
-
 
 provider "databricks" {
   azure_workspace_name  = azurerm_databricks_workspace.databricks.name
@@ -66,7 +64,6 @@ resource "databricks_dbfs_file" "ai_core" {
   ]
 }
 
-
 resource "databricks_dbfs_file" "ai_logging" {
   source               = lookup(data.external.download_ai_logging.result, "library")
   content_b64_md5      = md5(filebase64(pathexpand(local.ai_logging)))
@@ -88,20 +85,15 @@ data "template_file" "databricks_init" {
     ai_version = var.ai_jar_version
   })
 }
-
+ 
 resource "local_file" "databricks_init" {
-  filename = pathexpand(local.init_script)
-  content  =   templatefile("appinsights_logging_init.tpl", {
-    ai_key     = data.azurerm_application_insights.ai.instrumentation_key
-    oms_id     = data.azurerm_log_analytics_workspace.oms.workspace_id
-    oms_key    = data.azurerm_log_analytics_workspace.oms.primary_shared_key
-    ai_version = var.ai_jar_version
-  })
+  content  = data.template_file.databricks_init.rendered
+  filename = local.init_script
 }
 
 resource "databricks_dbfs_file" "dbfs_init_script" {
-  source               = local_file.databricks_init.filename
-  content_b64_md5      = md5(filebase64(pathexpand(local_file.databricks_init.filename)))
+  source               = local.init_script
+  content_b64_md5      = md5(base64encode(data.template_file.databricks_init.rendered))
   path                 = local.dbfs_init_script
   overwrite            = true
   mkdirs               = true
